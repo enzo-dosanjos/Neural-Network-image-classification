@@ -1,0 +1,4 @@
+mnist/testing/*/*.jpg
+mnist/training/*/*.jpg
+.vscode/*
+NN
