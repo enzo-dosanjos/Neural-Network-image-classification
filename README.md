@@ -34,17 +34,17 @@ Fine-tune an existing model with additional training data or simply improve it's
 ### 4. Test the Model:
 Evaluate the accuracy of a trained model using the testModel function and a test dataset. Provide the following parameters:
 
-    model_path: Path to the trained model to load.
-    data_csv_path: Path to the CSV file containing the test data.
-    data_size: Number of test samples.
-    input_size: Size of the input layer.
+- model_path: Path to the trained model to load.
+- data_csv_path: Path to the CSV file containing the test data.
+- data_size: Number of test samples.
+- input_size: Size of the input layer.
 
 ### 4. Make Predictions:
 Use a trained model to predict the label of a single input image using the predict function. Provide the following parameters:
 
-    model_path: Path to the trained model to load.
-    img_path: Path to the image you want to classify.
-    input_size: Size of the input layer.
+- model_path: Path to the trained model to load.
+- img_path: Path to the image you want to classify.
+- input_size: Size of the input layer.
 
 ---
 
