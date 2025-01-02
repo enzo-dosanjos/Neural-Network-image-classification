@@ -21,11 +21,27 @@ NN - implement a basic neural network with one hidden layer for now
 #include <iostream>
 using namespace std;
 
+// store the NN layers
+#include <vector>
+
 //-------------------------------------------------------- Used interfaces
 
 //-------------------------------------------------------------- Constants
 
 //------------------------------------------------------------------ Types
+struct Layer {
+    string type;                // "softmax", "ReLU"...
+    int input_size;
+    int output_size;
+
+    float *weights;
+    float *biases;
+    float *output;
+
+    float *weight_gradient;
+    float *bias_gradient;
+    float *error;
+};
 
 //////////////////////////////////////////////////////////////////  PUBLIC
 //------------------------------------------------------- Public functions
@@ -37,10 +53,23 @@ void initLayer (float *, float *, int, int);
 // Contract :
 //
 
+void initLayerGradient (float *, float *, int, int);
+// Usage :
+// Initializes the weights and biases' gradients of a layer to zero
+// Contract :
+//
+
 void computeLayer (float *, float *, float *, int, int, float *, string);
 // Usage :
 // Computes the output of a layer by applying the weights and biases to 
 // the input, and then applying the activation function given in parameter
+// Contract :
+//
+
+void addLayer (vector<Layer> &, string, int, int = 1);
+// Usage :
+// adds a layer to the neural network which is stored in a vector of layers with
+// the given type, input size (not needed if a layer already exists) and output size
 // Contract :
 //
 
@@ -50,7 +79,14 @@ void computeError (float *, int, float *);
 // Contract :
 //
 
-void trainModel (string, string, int, int, int, int, float);
+void destroyNN(vector<Layer> &);
+// Usage :
+// Fully destroys the neural network by freeing the memory allocated for
+// the weights, biases and output arrays of each layer and clear the vector
+// Contract :
+//
+
+void trainModel (vector<Layer> &, string, string, int, int, int, float);
 // Usage :
 // Trains the model using a given dataset. The paths and labels of the
 // dataset are loaded in an array which is shuffled. Then, the NN accumulate
@@ -59,22 +95,29 @@ void trainModel (string, string, int, int, int, int, float);
 // Contract :
 //
 
-void improveModel (string, string, int, int, int, int, float);
+void improveModel (vector<Layer> &, string, string, int, int, int, float);
 // Usage :
 // same as trainModel but the model is loaded from a binary file
 // Contract :
 //
 
-void testModel (string, string, int, int);
+int predictLabel (vector<Layer> &, string, float &);
+// Usage :
+// Predicts the label of an image using a given model
+// Contract :
+//
+
+void testModel (vector<Layer> &, string, string, int);
 // Usage :
 // Tests the model using a given dataset. Gives the accuracy of the model
 // at the end of the test
 // Contract :
 // data_size ne doit pas être nul
 
-void predict (string, string, int);
+void predict (vector<Layer> &, string, string);
 // Usage :
-// Uses a given model to predict the label of an image
+// Uses a given model loaded from a binary file to predict the label of 
+// a given image
 // Contract :
 //
 

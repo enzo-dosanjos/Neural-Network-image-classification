@@ -51,6 +51,5 @@ Use a trained model to predict the label of a single input image using the predi
 ## Future Improvements
 
 - Add support for additional activation functions (e.g., sigmoid, tanh).
-- Extend to multi-layer architectures with more hidden layers.
 - Improve performance with parallelization or optimized matrix operations.
 - Find how to use the performance of the computer's GPU

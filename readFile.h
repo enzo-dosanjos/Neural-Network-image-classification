@@ -19,7 +19,10 @@ readFile - reads or writes files (images, data, models) for the neural network
 #include <iostream>
 using namespace std;
 
+#include <vector>
+
 //-------------------------------------------------------- Used interfaces
+#include "NN.h"
 
 //-------------------------------------------------------------- Constants
 
@@ -51,16 +54,17 @@ bool readData (string, Data *, int);
 // Contract :
 //
 
-void saveModel(const string, int, float *, float *, int, float *, float *, int);
+void saveModel(const string, vector<Layer> &);
 // Usage :
-// Saves model weights and biases to a binary file
+// Saves the number of layers and the layer's weights, biases, type 
+// and sizes into a binary file
 // Contract :
 //
 
-void loadModel(const string, int, float *, float *, int, float *, float *, int);
+void loadModel(const string, vector<Layer> &);
 // Usage :
-// Loads model weights and biases from a binary file into arrays 
-// given in parameters
+// Loads the number of layers and the layer's weights, biases, type 
+// and sizes from a binary file into a vector of layers given in parameter
 // Contract :
 //
 

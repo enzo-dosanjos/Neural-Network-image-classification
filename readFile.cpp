@@ -13,6 +13,7 @@ using namespace std;
 
 //------------------------------------------------------- Personal Include
 #include "readFile.h"
+#include "NN.h"
 
 // readImg
 #define STB_IMAGE_IMPLEMENTATION
@@ -117,7 +118,7 @@ bool readData (string csv_path, Data *data, int batch_size) {
     // Input CSV file
     ifstream csvFile(csv_path);
     if (!csvFile) {
-        cerr << "Failed to open the CSV file." << std::endl;
+        cerr << "Failed to open the CSV file." << endl;
         return false;
     }
 
@@ -152,42 +153,82 @@ bool readData (string csv_path, Data *data, int batch_size) {
     return true;
 } //----- end of readData
 
-void saveModel(const string filename, int input_size, float *layer_1_weight, float *layer_1_bias, int layer_1_size, 
-                                                        float *output_weight, float *output_bias, int output_size) {
+
+void saveModel (const string filename, vector<Layer> &NN) {
     ofstream file(filename, ios::binary);
     if (!file) {
         cerr << "Error: Unable to open file for saving model." << endl;
         return;
     }
 
-    // Save layer 1 weights and biases
-    file.write(reinterpret_cast<char*>(layer_1_weight), input_size * layer_1_size * sizeof(float));
-    file.write(reinterpret_cast<char*>(layer_1_bias), layer_1_size * sizeof(float));
+    // Save the number of layers
+    int num_layers = NN.size();
+    file.write(reinterpret_cast<char*>(&num_layers), sizeof(int));
 
-    // Save output layer weights and biases
-    file.write(reinterpret_cast<char*>(output_weight), layer_1_size * output_size * sizeof(float));
-    file.write(reinterpret_cast<char*>(output_bias), output_size * sizeof(float));
+    // Save each layer
+    for (int i = 0; i < num_layers; i++) {
+        Layer layer = NN[i];
+
+        // Save the layer type
+        int type_length = layer.type.length();
+        file.write(reinterpret_cast<char*>(&type_length), sizeof(int));
+        file.write(layer.type.c_str(), type_length);
+
+        // Save the layer input and output sizes
+        file.write(reinterpret_cast<char*>(&layer.input_size), sizeof(int));
+        file.write(reinterpret_cast<char*>(&layer.output_size), sizeof(int));
+
+        // Save the layer weights and biases
+        file.write(reinterpret_cast<char*>(layer.weights), layer.input_size * layer.output_size * sizeof(float));
+        file.write(reinterpret_cast<char*>(layer.biases), layer.output_size * sizeof(float));
+    }
 
     file.close();
     cout << "Model saved to " << filename << endl;
 } //----- end of saveModel
 
 
-void loadModel(const string filename, int input_size, float *layer_1_weight, float *layer_1_bias, int layer_1_size,
-                                                        float *output_weight, float *output_bias, int output_size) {
+void loadModel(const string filename, vector<Layer> &NN) {
     ifstream file(filename, ios::binary);
     if (!file) {
         cerr << "Error: Unable to open file for loading model." << endl;
         return;
     }
 
-    // Load layer 1 weights and biases
-    file.read(reinterpret_cast<char*>(layer_1_weight), input_size * layer_1_size * sizeof(float));
-    file.read(reinterpret_cast<char*>(layer_1_bias), layer_1_size * sizeof(float));
+    // destroy the current model if needed
+    if (NN.size() > 0) {
+        destroyNN(NN);
+    }
 
-    // Load output layer weights and biases
-    file.read(reinterpret_cast<char*>(output_weight), layer_1_size * output_size * sizeof(float));
-    file.read(reinterpret_cast<char*>(output_bias), output_size * sizeof(float));
+
+    // Load the number of layers
+    int num_layers;
+    file.read(reinterpret_cast<char*>(&num_layers), sizeof(int));
+
+    // Load each layer
+    for (int i = 0; i < num_layers; i++) {
+        // Load the type
+        int type_length;
+        file.read(reinterpret_cast<char*>(&type_length), sizeof(int));
+
+        char *type = new char[type_length + 1];
+        file.read(type, type_length);
+        type[type_length] = '\0';  // Null-terminate the string
+        string layer_type = type;
+        delete[] type;
+
+        // Load the input and output sizes
+        int input_size, output_size;
+        file.read(reinterpret_cast<char*>(&input_size), sizeof(int));
+        file.read(reinterpret_cast<char*>(&output_size), sizeof(int));
+
+        // Add the layer to the model
+        addLayer(NN, layer_type, output_size, input_size);
+
+        // Load the weights and biases
+        file.read(reinterpret_cast<char*>(NN.back().weights), input_size * output_size * sizeof(float));
+        file.read(reinterpret_cast<char*>(NN.back().biases), output_size * sizeof(float));
+    }
 
     file.close();
     cout << "Model loaded from " << filename << endl;
