@@ -31,6 +31,7 @@ using namespace std;
 //------------------------------------------------------------------ Types
 struct Layer {
     string type;                // "softmax", "ReLU"...
+    vector<float> activation_func_params;  // parameters for the activation function like alpha for ELU
     int input_size;
     int output_size;
 
@@ -59,14 +60,17 @@ void initLayerGradient (float *, float *, int, int);
 // Contract :
 //
 
-void computeLayer (float *, float *, float *, int, int, float *, string);
+void computeLayer (float *, float *, float *, int, int, float *, string, const vector<float> &);
 // Usage :
 // Computes the output of a layer by applying the weights and biases to 
 // the input, and then applying the activation function given in parameter
 // Contract :
 //
 
-void addLayer (vector<Layer> &, string, int, int = 1);
+void addLayer(vector<Layer> &, string, int, int, const vector<float> &);
+void addLayer(vector<Layer> &, string, int, int);
+void addLayer(vector<Layer> &, string, int, const vector<float> &);
+void addLayer(vector<Layer> &, string, int);
 // Usage :
 // adds a layer to the neural network which is stored in a vector of layers with
 // the given type, input size (not needed if a layer already exists) and output size

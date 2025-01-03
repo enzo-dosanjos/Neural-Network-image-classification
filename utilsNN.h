@@ -36,9 +36,45 @@ void ReLU (float *, int);
 // Contract :
 //
 
-void softmax (float *, float *, int);
+void softmax (float *, int);
 // Usage :
 // Applies exp(x) / sum(exp(x)) to each element of the array
+// Contrat :
+//
+
+void sigmoid (float *, int);
+// Usage :
+// Applies 1 / (1 + exp(-x)) to each element of the array
+// Contrat :
+//
+
+void softplus(float *, int );
+// Usage :
+// Applies log(1 + exp(x)) to each element of the array
+// Contrat :
+//
+
+void softsign(float *, int );
+// Usage :
+// Applies x / (1 + |x|) to each element of the array
+// Contrat :
+//
+
+void tanh(float *, int );
+// Usage :
+// Applies (exp(x) - exp(-x)) / (exp(x) + exp(-x)) to each element of the array
+// Contrat :
+//
+
+void ELU(float *, int , float);
+// Usage :
+// Applies x if x > 0, alpha * (exp(x) - 1) otherwise to each element of the array
+// Contrat :
+//
+
+void SELU(float *, int, float = 1.6732632423543772848170429916717, float = 1.0507009873554804934193349852946);
+// Usage :
+// Applies scale * (x if x > 0, alpha * (exp(x) - 1) otherwise) to each element of the array
 // Contrat :
 //
 
@@ -60,7 +96,7 @@ float crossEntropyLoss (float *, const int);
 // Contrat :
 //
 
-void backPropagation(float *, int, float *, float *, int, float *, string);
+void backPropagation(float *, int, float *, float *, int, float *, string, const vector<float> &);
 // Usage :
 // Computes the error for the current layer based on the next layer's error and weights
 // Contrat :

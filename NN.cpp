@@ -57,7 +57,7 @@ void initLayerGradient (float *layer_weight_grad, float *layer_bias_grad, int in
 } //----- end of initLayerGradient
 
 
-void computeLayer (float *input, float *layer_weight, float *layer_bias, int input_size, int layer_size, float *output, string activation_function) {
+void computeLayer (float *input, float *layer_weight, float *layer_bias, int input_size, int layer_size, float *output, string activation_function, const vector<float> &activation_func_params) { 
     mulMat(input, input_size, layer_weight, layer_size, output);
     addMat(output, layer_bias, layer_size, output);
 
@@ -65,18 +65,56 @@ void computeLayer (float *input, float *layer_weight, float *layer_bias, int inp
         ReLU(output, layer_size);
     }
     else if (activation_function == "softmax") {
-        softmax(output, output, layer_size);
-    }  // todo: add other activation functions
+        softmax(output, layer_size);
+
+    } else if (activation_function == "sigmoid") {
+        sigmoid(output, layer_size);
+
+    } else if (activation_function == "softplus") {
+        softplus(output, layer_size);
+
+    } else if (activation_function == "softsign") {
+        softsign(output, layer_size);
+
+    } else if (activation_function == "tanh") {
+        tanh(output, layer_size);
+
+    } else if (activation_function == "ELU") {
+        float alpha;
+        if (activation_func_params.size() >= 1) {
+            alpha = activation_func_params[0];
+        } else {
+            cerr << "Error: missing parameter for ELU activation function" << endl;
+            return;
+        }
+        ELU(output, layer_size, alpha);
+
+    } else if (activation_function == "SELU") {
+        float alpha = 1.6732632423543772848170429916717;
+        float scale = 1.0507009873554804934193349852946;
+        if (activation_func_params.size() >= 2) {
+            alpha = activation_func_params[0];
+            scale = activation_func_params[1];
+        }
+        SELU(output, layer_size, alpha, scale);
+    }
+    
     else {
         cout << "Activation function not recognised" << endl;
     }
 } //----- end of computeLayer
 
 
-void addLayer (vector<Layer> &NN, string type, int output_size, int input_size) {
+void addLayer (vector<Layer> &NN, string type, int output_size, int input_size, const vector<float> &activation_func_params) {
     Layer layer;
     layer.type = type;
+    layer.activation_func_params = activation_func_params;
 
+    if (NN.size() == 0 && input_size < 0) {
+        cerr << "Error: The input size must be specified for the first layer" << endl;
+        return;
+    }
+    
     layer.input_size = (NN.size() > 0) ? NN[NN.size()-1].output_size : input_size;
 
     layer.output_size = output_size;
@@ -93,6 +131,19 @@ void addLayer (vector<Layer> &NN, string type, int output_size, int input_size) 
     initLayerGradient(layer.weight_gradient, layer.bias_gradient, layer.input_size, output_size);
 
     NN.push_back(layer);
+} //----- end of addLayer
+
+
+void addLayer(vector<Layer> &NN, string type, int output_size, int input_size) {
+    addLayer(NN, type, output_size, input_size, {});
+} //----- end of addLayer
+
+void addLayer(vector<Layer> &NN, string type, int output_size, const vector<float> &activation_func_params) {
+    addLayer(NN, type, output_size, -1, activation_func_params);
+} //----- end of addLayer
+
+void addLayer(vector<Layer> &NN, string type, int output_size) {
+    addLayer(NN, type, output_size, -1, {});
 } //----- end of addLayer
 
 
@@ -159,7 +210,7 @@ void trainModel (vector<Layer> &NN, string model_path, string data_csv_path, int
 
                     for (int i = 0; i < NN.size(); i++) {
                         float *input = (i == 0) ? imgArray : NN[i - 1].output;
-                        computeLayer(input, NN[i].weights, NN[i].biases, NN[i].input_size, NN[i].output_size, NN[i].output, NN[i].type);
+                        computeLayer(input, NN[i].weights, NN[i].biases, NN[i].input_size, NN[i].output_size, NN[i].output, NN[i].type, NN[i].activation_func_params);
                     }
 
                     // Compute loss for the last layer
@@ -171,7 +222,7 @@ void trainModel (vector<Layer> &NN, string model_path, string data_csv_path, int
                     // Backward pass
                     computeError(output.output, label, output.error);
                     for (int i = NN.size() - 1; i > 0; i--) {
-                        backPropagation(NN[i].weights, NN[i].output_size, NN[i].error, NN[i - 1].output, NN[i - 1].output_size, NN[i - 1].error, NN[i - 1].type);
+                        backPropagation(NN[i].weights, NN[i].output_size, NN[i].error, NN[i - 1].output, NN[i - 1].output_size, NN[i - 1].error, NN[i - 1].type, NN[i - 1].activation_func_params);
                     }
 
                     // Accumulate Gradients
@@ -223,7 +274,7 @@ int predictLabel (vector<Layer> &NN, string img_path, float &highest_prob) {
 
         for (int i = 0; i < NN.size(); i++) {
             float *input = (i == 0) ? imgArray : NN[i - 1].output;
-            computeLayer(input, NN[i].weights, NN[i].biases, NN[i].input_size, NN[i].output_size, NN[i].output, NN[i].type);
+            computeLayer(input, NN[i].weights, NN[i].biases, NN[i].input_size, NN[i].output_size, NN[i].output, NN[i].type, NN[i].activation_func_params);
         }
 
         highest_prob = 0;

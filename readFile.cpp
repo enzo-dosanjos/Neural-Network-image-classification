@@ -178,6 +178,13 @@ void saveModel (const string filename, vector<Layer> &NN) {
         file.write(reinterpret_cast<char*>(&layer.input_size), sizeof(int));
         file.write(reinterpret_cast<char*>(&layer.output_size), sizeof(int));
 
+        // Save the activation function parameters
+        int num_params = layer.activation_func_params.size();
+        file.write(reinterpret_cast<char*>(&num_params), sizeof(int));
+        if (num_params > 0) {
+            file.write(reinterpret_cast<char*>(layer.activation_func_params.data()), num_params * sizeof(float));
+        }
+
         // Save the layer weights and biases
         file.write(reinterpret_cast<char*>(layer.weights), layer.input_size * layer.output_size * sizeof(float));
         file.write(reinterpret_cast<char*>(layer.biases), layer.output_size * sizeof(float));
@@ -200,7 +207,6 @@ void loadModel(const string filename, vector<Layer> &NN) {
         destroyNN(NN);
     }
 
-
     // Load the number of layers
     int num_layers;
     file.read(reinterpret_cast<char*>(&num_layers), sizeof(int));
@@ -222,8 +228,16 @@ void loadModel(const string filename, vector<Layer> &NN) {
         file.read(reinterpret_cast<char*>(&input_size), sizeof(int));
         file.read(reinterpret_cast<char*>(&output_size), sizeof(int));
 
+        // Load the activation function parameters
+        int num_params;
+        file.read(reinterpret_cast<char*>(&num_params), sizeof(int));
+        vector<float> activation_func_params(num_params);
+        if (num_params > 0) {
+            file.read(reinterpret_cast<char*>(activation_func_params.data()), num_params * sizeof(float));
+        }
+
         // Add the layer to the model
-        addLayer(NN, layer_type, output_size, input_size);
+        addLayer(NN, layer_type, output_size, input_size, activation_func_params);
 
         // Load the weights and biases
         file.read(reinterpret_cast<char*>(NN.back().weights), input_size * output_size * sizeof(float));
