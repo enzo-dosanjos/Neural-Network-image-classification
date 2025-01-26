@@ -19,6 +19,7 @@ using namespace std;
 // store the NN layers
 #include <vector>
 
+
 /////////////////////////////////////////////////////////////////  PRIVATE
 //-------------------------------------------------------------- Constants
 
@@ -204,36 +205,43 @@ void trainModel (vector<Layer> &NN, string model_path, string data_csv_path, int
             for (int b = d; b < (data_size < d + batch_size ? data_size : d + batch_size) ; b++) {
                 if (readImg(dataArray[b].path, imgArray, width, height, channels)) {
                     // Normalise the image
-                    Normalize(imgArray, width, height, 28, 28, channels);
+                    vector <float *> roisArr;
+                    Normalize(imgArray, roisArr, width, height, 28, 28, channels, false);
 
-                    int label = dataArray[b].label;
+                    if (!roisArr.empty() && roisArr[0] != nullptr) {
+                        int label = dataArray[b].label;
 
-                    for (int i = 0; i < NN.size(); i++) {
-                        float *input = (i == 0) ? imgArray : NN[i - 1].output;
-                        computeLayer(input, NN[i].weights, NN[i].biases, NN[i].input_size, NN[i].output_size, NN[i].output, NN[i].type, NN[i].activation_func_params);
+                        for (int i = 0; i < NN.size(); i++) {
+                            float *input = (i == 0) ? roisArr[0] : NN[i - 1].output;
+                            computeLayer(input, NN[i].weights, NN[i].biases, NN[i].input_size, NN[i].output_size, NN[i].output, NN[i].type, NN[i].activation_func_params);
+                        }
+
+                        // Compute loss for the last layer
+                        Layer &output = NN.back();
+                        float loss = crossEntropyLoss(output.output, label);
+                        epoch_loss += loss;
+                        batch_loss += loss;
+
+                        // Backward pass
+                        computeError(output.output, label, output.error);
+                        for (int i = NN.size() - 1; i > 0; i--) {
+                            backPropagation(NN[i].weights, NN[i].output_size, NN[i].error, NN[i - 1].output, NN[i - 1].output_size, NN[i - 1].error, NN[i - 1].type, NN[i - 1].activation_func_params);
+                        }
+
+                        // Accumulate Gradients
+                        for (int i = 0; i < NN.size(); i++) {
+                            float *input = (i == 0) ? roisArr[0] : NN[i - 1].output;
+                            accumulateGradient(NN[i].weight_gradient, NN[i].bias_gradient, NN[i].error, input, NN[i].input_size, NN[i].output_size);
+                        }
+
+                        // Free the image memory when done
+                        delete[] roisArr[0];
+                        roisArr.clear();
+
+                    } else {
+                        cerr << "Error: Failed to normalize image." << endl;
                     }
 
-                    // Compute loss for the last layer
-                    Layer &output = NN.back();
-                    float loss = crossEntropyLoss(output.output, label);
-                    epoch_loss += loss;
-                    batch_loss += loss;
-
-                    // Backward pass
-                    computeError(output.output, label, output.error);
-                    for (int i = NN.size() - 1; i > 0; i--) {
-                        backPropagation(NN[i].weights, NN[i].output_size, NN[i].error, NN[i - 1].output, NN[i - 1].output_size, NN[i - 1].error, NN[i - 1].type, NN[i - 1].activation_func_params);
-                    }
-
-                    // Accumulate Gradients
-                    for (int i = 0; i < NN.size(); i++) {
-                        float *input = (i == 0) ? imgArray : NN[i - 1].output;
-                        accumulateGradient(NN[i].weight_gradient, NN[i].bias_gradient, NN[i].error, input, NN[i].input_size, NN[i].output_size);
-                    }
-
-                    // Free the image memory when done
-                    delete[] imgArray;
-                
                 } else {
                     cerr << "Error: Failed to read image" << endl;
                 }
@@ -264,36 +272,54 @@ void improveModel (vector<Layer> &NN, string model_path, string data_csv_path, i
 } //----- end of improveModel
 
 
-int predictLabel (vector<Layer> &NN, string img_path, float &highest_prob) {
+vector<int> predictLabel (vector<Layer> &NN, string img_path, vector<float> &highest_prob, bool multiple) {
     float *imgArray;
     int width, height, channels;
 
     if (readImg(img_path, imgArray, width, height, channels)) {
         // Normalise the image
-        Normalize(imgArray, width, height, 28, 28, channels);
+        vector <float *> roisArr;
+        Normalize(imgArray, roisArr, width, height, 28, 28, channels, multiple);
 
-        for (int i = 0; i < NN.size(); i++) {
-            float *input = (i == 0) ? imgArray : NN[i - 1].output;
-            computeLayer(input, NN[i].weights, NN[i].biases, NN[i].input_size, NN[i].output_size, NN[i].output, NN[i].type, NN[i].activation_func_params);
-        }
+        if (!roisArr.empty() && roisArr[0] != nullptr) {
 
-        highest_prob = 0;
-        int predicted_label = 0;
-        for (int i = 0; i < NN.back().output_size; i++) {
-            if (NN.back().output[i] > highest_prob) {
-                highest_prob = NN.back().output[i];
-                predicted_label = i;
+            if (multiple) {
+                cout << roisArr.size() << " numbers found in the image." << endl;
             }
+
+            vector<int> predicted_label;
+            for (int roi = 0; roi < roisArr.size(); roi++) {
+                
+                for (int i = 0; i < NN.size(); i++) {
+                    float *input = (i == 0) ? roisArr[roi] : NN[i - 1].output;
+                    computeLayer(input, NN[i].weights, NN[i].biases, NN[i].input_size, NN[i].output_size, NN[i].output, NN[i].type, NN[i].activation_func_params);
+                }
+
+                highest_prob.push_back(0);
+                predicted_label.push_back(0);
+                for (int i = 0; i < NN.back().output_size; i++) {
+                    if (NN.back().output[i] > highest_prob[roi]) {
+                        highest_prob[roi] = NN.back().output[i];
+                        predicted_label[roi] = i;
+                    }
+                }
+            }
+
+            // Free the image memory when done
+            for (auto roi : roisArr) {
+                delete[] roi;
+            }
+            roisArr.clear();
+
+            return predicted_label;
+        } else {
+            cerr << "Error: Failed to normalize image." << endl;
+            return {-1};
         }
-
-        // Free the image memory when done
-        delete[] imgArray;
-
-        return predicted_label;
 
     } else {
         cerr << "Error: Failed to read image" << endl;
-        return -1;
+        return {-1};
     }
 } //----- end of predict
 
@@ -314,10 +340,10 @@ void testModel (vector<Layer> &NN, string model_path, string data_csv_path, int 
     for (int d = 0; d < data_size; d++) {
         int label = dataArray[d].label;
 
-        float _prob;
-        int predicted_label = predictLabel(NN, dataArray[d].path, _prob);
+        vector<float> _prob;
+        vector<int> predicted_label = predictLabel(NN, dataArray[d].path, _prob, false);
 
-        if (predicted_label == label) {
+        if (predicted_label[0] == label) {
             correct_predictions++;
             cout << "Correct prediction. Total: " << correct_predictions << endl;
         } else {
@@ -334,10 +360,12 @@ void testModel (vector<Layer> &NN, string model_path, string data_csv_path, int 
 void predict (vector<Layer> &NN, string model_path, string img_path) {
     loadModel(model_path, NN);
 
-    float highest_prob;
-    int predicted_label = predictLabel(NN, img_path, highest_prob);
+    vector<float> highest_prob;
+    vector<int> predicted_label = predictLabel(NN, img_path, highest_prob, true);
 
-    cout << "Predicted label: " << predicted_label << "  with " << highest_prob*100.0 << "%" << endl;
+    for (int prediction = 0; prediction < predicted_label.size(); prediction++) {
+        cout << "Predicted label: " << predicted_label[prediction] << "  with " << highest_prob[prediction]*100.0 << "%" << endl;
+    }
 
     destroyNN(NN);
 } //----- end of predict

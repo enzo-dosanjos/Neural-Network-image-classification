@@ -23,6 +23,11 @@ using namespace std;
 #include <fstream>
 #include <sstream>
 
+// Normalize
+#include <opencv2/opencv.hpp>
+#include <algorithm>
+using namespace cv;
+
 /////////////////////////////////////////////////////////////////  PRIVATE
 //-------------------------------------------------------------- Constants
 
@@ -59,55 +64,165 @@ bool readImg (const string filename, float *&pixArr, int &width, int &height, in
 } //----- end of readImg
 
 
-bool Normalize(float *&pixArr, int width, int height, int newWidth, int newHeight, int nb_channels) {
+vector<Rect> mergeOverlappingRects(const vector<Rect>& rects, float overlapThreshold = 0.5, int proximityThreshold = 5) {
+    vector<Rect> mergedRects;
+    vector<bool> merged(rects.size(), false);  // avoid verifying two times the same rect
+
+    for (size_t i = 0; i < rects.size(); ++i) {
+        if (merged[i]) continue;
+
+        Rect combinedRect = rects[i];  // Initialise with the current rect
+
+        for (size_t j = i + 1; j < rects.size(); ++j) {
+            if (merged[j]) continue;
+
+            // Vérifier l'intersection ou la proximité
+            Rect intersection = combinedRect & rects[j];
+            float intersectionArea = (float)intersection.area();
+            float unionArea = (float)(combinedRect.area() + rects[j].area() - intersectionArea);
+            float overlap = intersectionArea / unionArea;
+
+            // Verify if rectangles are close or overlapping
+            if (overlap >= overlapThreshold || 
+                (abs(combinedRect.x - rects[j].x) <= proximityThreshold && abs(combinedRect.y - rects[j].y) <= proximityThreshold)) {
+                combinedRect |= rects[j];  // merge
+                merged[j] = true;  // put it as merged
+            }
+        }
+
+        mergedRects.push_back(combinedRect);
+    }
+    
+    return mergedRects;
+}
+
+
+vector<Rect> filterSmallRects(const vector<Rect>& rects, int minArea) {
+    vector<Rect> filteredRects;
+    for (const auto& rect : rects) {
+        if (rect.area() >= minArea) {  // Only keep rectangles with area >= minArea
+            filteredRects.push_back(rect);
+        }
+    }
+    return filteredRects;
+}
+
+
+bool Normalize(float *&pixArr, vector<float *> &roisArr, int width, int height, int newWidth, int newHeight, int nb_channels, bool multiple) {
+    //  Create opencv image object
+    Mat matImage;
+
     // Convert to grayscale if needed
     if (nb_channels == 3 || nb_channels == 4) {
         cout << "Converting to grayscale" << endl;
-        float *greyPixArr = new float[width * height];
-        for (int i = 0; i < width * height; i++) {
-            // Use only the RGB channels (ignore the alpha channel for pngs)
-            greyPixArr[i] = 0.299f * pixArr[i * nb_channels] +
-                            0.587f * pixArr[i * nb_channels + 1] +
-                            0.114f * pixArr[i * nb_channels + 2];
-        }
+        // Create opencv image object
+        matImage = Mat(height, width, nb_channels == 3 ? CV_32FC3 : CV_32FC4, pixArr);
+
+        // Convert
+        Mat grayImage;
+        cvtColor(matImage, grayImage, COLOR_BGR2GRAY);
+
+        // Update pixArr
         delete[] pixArr;
-        pixArr = greyPixArr;
+        pixArr = new float[width * height];
+        memcpy(pixArr, grayImage.ptr<float>(), width * height * sizeof(float));
+        matImage = grayImage;
+
+    } else {
+        matImage = Mat(height, width, CV_32FC1, pixArr);
     }
 
-    // Resize the image if needed
-    if (width != newWidth || height != newHeight) {
-        cout << "Resizing image" << endl;
-        float *resizedPixArr = new float[newWidth * newHeight];
-        float x_ratio = static_cast<float>(width) / newWidth;
-        float y_ratio = static_cast<float>(height) / newHeight;
-        float px, py;
-        for (int i = 0; i < newHeight; i++) {
-            for (int j = 0; j < newWidth; j++) {
-                px = floor(j * x_ratio);
-                py = floor(i * y_ratio);
-                resizedPixArr[(i * newWidth) + j] = pixArr[(static_cast<int>(py) * width) + static_cast<int>(px)];
+    if (multiple) {
+        // Detect the regions of interest in the image
+        // Apply Gaussian Blur with a 5x5 kernel
+        if (width * height >= 400*400) {
+            GaussianBlur(matImage, matImage, Size(3, 3), 0);
+        }
+
+        // Convert to CV_8UC1 for Canny
+        Mat detContImage8U;
+        matImage.convertTo(detContImage8U, CV_8UC1, 255.0);
+
+        // Apply Canny to detect Contours
+        Mat edges;
+        Canny(detContImage8U, edges, 30, 150);
+
+        // Find Contours
+        vector<vector<Point>> contours;
+        findContours(edges, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+        // Sort contours by their x position
+        sort(contours.begin(), contours.end(),
+                [](const vector<Point>& c1, const vector<Point>& c2) {
+                    return boundingRect(c1).x < boundingRect(c2).x;
+                });
+
+        // Get bounding rectangles
+        vector<Rect> rects;
+        for (const auto &contour : contours) {
+            // Get bounding rectangle
+            Rect rect = boundingRect(contour);
+            rects.push_back(rect);
+        }
+
+
+        vector<Rect> mergedRects = mergeOverlappingRects(rects, 0.05, 10.0);
+
+        vector<Rect> finalRects = filterSmallRects(mergedRects, width > height ? width : height);
+
+
+        // Crop ROIs and process
+        int i = 0;
+        for (const auto &rect : finalRects) {
+            // Crop
+            Mat roi = matImage(rect);
+
+            // Add a border to the number so it does not touch the edges of the image
+            copyMakeBorder(roi, roi, 5, 5, 5, 5, BORDER_CONSTANT, roi.data[0]);
+            
+            // Resize the image
+            resize(roi, roi, Size(newWidth, newHeight), 0, 0, INTER_LINEAR);
+
+
+            // Normalize the pixel values (divide by 255)
+            roi.convertTo(roi, CV_32FC1, 1.0 / 255.0);
+
+
+            // Calculate mean intensity to determine if the background is white
+            float mean_intensity = mean(roi)[0];
+
+            if (mean_intensity > 0.5f) { // Invert if most pixels are white
+                roi = Scalar(1.0) - roi;
             }
+
+
+            // Convert Mat to float* and store in roisArr
+            float *roiArr = new float[newWidth * newHeight];
+            memcpy(roiArr, roi.ptr<float>(), newWidth * newHeight * sizeof(float));
+            roisArr.push_back(roiArr);
         }
-        delete[] pixArr;
-        pixArr = resizedPixArr;
-    }
 
-    // Normalize the pixel values (divide by 255)
-    int total_pixels = newWidth * newHeight;
-    float total_intensity = 0.0f;
+    } else {
+        // Resize the image
+        resize(matImage, matImage, Size(newWidth, newHeight), 0, 0, INTER_LINEAR);
 
-    for (int i = 0; i < total_pixels; i++) {
-        pixArr[i] = pixArr[i] / 255.0f;
-        total_intensity += pixArr[i];
-    }
 
-    // Calculate mean intensity to determine if the background is white
-    float mean_intensity = total_intensity / total_pixels;
+        // Normalize the pixel values (divide by 255)
+        matImage.convertTo(matImage, CV_32FC1, 1.0 / 255.0);
 
-    if (mean_intensity > 0.5f) { // Invert if most pixels are white
-        for (int i = 0; i < total_pixels; i++) {
-            pixArr[i] = 1.0f - pixArr[i];
+
+        // Calculate mean intensity to determine if the background is white
+        float mean_intensity = mean(matImage)[0];
+
+        if (mean_intensity > 0.5f) { // Invert if most pixels are white
+            matImage = Scalar(1.0) - matImage;
         }
+
+
+        // Convert Mat to float* and store in roisArr
+        float *pixArr = new float[newWidth * newHeight];
+        memcpy(pixArr, matImage.ptr<float>(), newWidth * newHeight * sizeof(float));
+        roisArr.push_back(pixArr);
     }
 
     return true;

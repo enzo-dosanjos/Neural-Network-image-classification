@@ -41,10 +41,11 @@ bool readImg (const string, float *&, int &, int &, int &);
 // Contract :
 //
 
-bool Normalize(float *&, int, int, int, int, int);
+bool Normalize(float *&, vector<float *> &, int, int, int, int, int, bool);
 // Usage :
-// Converts a pixel array to grayscale, resizes it, invert it (if needed) 
-// and normalizes the values between 0 and 1
+// Converts a pixel array to grayscale, get the different rois in the image
+// and create a vector, resizes it, invert it (if needed) and normalizes the 
+// values between 0 and 1
 // Contract :
 //
 

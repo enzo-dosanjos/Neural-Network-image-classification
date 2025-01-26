@@ -105,7 +105,7 @@ void improveModel (vector<Layer> &, string, string, int, int, int, float);
 // Contract :
 //
 
-int predictLabel (vector<Layer> &, string, float &);
+vector<int> predictLabel (vector<Layer> &, string, vector<float> &, bool);
 // Usage :
 // Predicts the label of an image using a given model
 // Contract :
